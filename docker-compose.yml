@@ -1,0 +1,70 @@
+services:
+
+  mysql:
+    image: mysql:8
+    container_name: om-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: Password1
+      MYSQL_DATABASE: ordermanagementsystem
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - oms-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: "eHUdIfsaQ0ywv3g8wwUNbg"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "1"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - oms-net
+
+  payment-service:
+    container_name: payment-service
+    build:
+      context: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ordermanagementsystem
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: Password1
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - oms-net
+
+volumes:
+  mysql_data:
+  kafka_data:
+
+networks:
+  oms-net:
+    external: true

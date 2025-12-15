@@ -15,15 +15,15 @@ import java.util.Date;
 @AllArgsConstructor
 @NoArgsConstructor
 public class Payment {
-    @Column(name = "PAYMENT_TRANSACTION_ID")
+    @Column(name = "ORDER_ID")
     @Id
+    private String orderId;
+    @Column(name = "PAYMENT_TRANSACTION_ID")
     private Long paymentTransactionId;
     @Column(name = "ORDER_TOTAL")
     private double orderTotal;
     @Column(name = "UNIT_PRICE")
     private double unitPrince;
-    @Column(name = "ORDER_ID")
-    private String orderId;
     @Column(name = "USER_ID")
     private String userId;
     @Column(name = "CREATED_TIMESTAMP")

@@ -38,14 +38,12 @@ public class PaymentService  {
             UserAccountBalance getUserBalanceResponse = accountBalanceRepository.getUserBalanceByUserId(event.getPaymentRequest().getUserId());
 
             if (getUserBalanceResponse.getAvailableBalance() >= event.getPaymentRequest().getOrderTotal()) {
-                updateUserBalance(event, getUserBalanceResponse);
                 capturePaymentBasedOnEvent(event, true);
+                preparePaymentEvent(event, true);
 
-                paymentSuccessEvent(event);
             } else {
                 capturePaymentBasedOnEvent(event, false);
-
-                paymentFailureEvent(event);
+                preparePaymentEvent(event, false);
             }
         } catch (Exception e) {
             logger.error("Error handling payment event for orderId {}", event.getPaymentRequest().getOrderId(), e);
@@ -62,76 +60,52 @@ public class PaymentService  {
         return formattedDateTime;
     }
 
-    public void paymentSuccessEvent(PaymentEvent event) {
+    public void preparePaymentEvent(PaymentEvent event, boolean isSuccessEvent) {
         final String methodName = "paymentSuccessEvent";
-        logger.info(methodName, "Entry");
+        logger.info(methodName, "{} Entry");
 
         PaymentRequestDTO paymentEvent = new PaymentRequestDTO();
 
-        paymentEvent.setPaymentStatus(PaymentStatus.COMPLETED);
-        paymentEvent.setOrderId(event.getPaymentRequest().getOrderId());
+        if (isSuccessEvent) {
+            paymentEvent.setPaymentStatus(PaymentStatus.COMPLETED);
+        } else {
+            paymentEvent.setPaymentStatus(PaymentStatus.FAILED);
+        }
         paymentEvent.setUserId(event.getPaymentRequest().getUserId());
+        paymentEvent.setOrderId(event.getPaymentRequest().getOrderId());
         paymentEvent.setTransactionId(event.getPaymentRequest().getTransactionId());
         paymentEvent.setEventTimestamp(getLocalDateTime());
 
-        kafkaMessageProducer.paymentSuccessEvent(paymentEvent);
-
-        logger.info(methodName, "Exit");
-    }
-
-    private void paymentFailureEvent(PaymentEvent event) {
-        final String methodName = "paymentFailureEvent";
-        logger.info(methodName, "Entry");
-
-        PaymentRequestDTO paymentEvent = new PaymentRequestDTO();
-
-        paymentEvent.setPaymentStatus(PaymentStatus.FAILED);
-        paymentEvent.setUserId(event.getPaymentRequest().getUserId());
-        paymentEvent.setOrderId(event.getPaymentRequest().getOrderId());
-        paymentEvent.setEventTimestamp(getLocalDateTime());
-
-        kafkaMessageProducer.paymentFailureEvent(paymentEvent);
-        logger.info(methodName, "Exit");
+        kafkaMessageProducer.publishPaymentEvent(paymentEvent);
+        logger.info(methodName, "{} Exit");
     }
 
     @Transactional
     private void capturePaymentBasedOnEvent(PaymentEvent event, boolean isSuccessPaymentEvent) {
         final String methodName = "updatePaymentBasedOnEvent";
-        logger.info(methodName, "Entry");
+        logger.info(methodName, "{} Entry");
 
         Payment updatedPayment = new Payment();
+        UserAccountBalance getUserBalanceResponse = accountBalanceRepository.findById(event.getPaymentRequest().getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (isSuccessPaymentEvent) {
-            updatedPayment.setOrderId(event.getPaymentRequest().getOrderId());
-            updatedPayment.setUserId(event.getPaymentRequest().getUserId());
-            updatedPayment.setPaymentTransactionId(event.getPaymentRequest().getTransactionId());
-            updatedPayment.setOrderTotal(event.getPaymentRequest().getOrderTotal());
-            updatedPayment.setCreatedTimestamp(event.getPaymentRequest().getEventTimestamp());
             updatedPayment.setPaymentStatus(PaymentStatus.COMPLETED);
+            getUserBalanceResponse.setAvailableBalance(getUserBalanceResponse.getAvailableBalance() - event.getPaymentRequest().getOrderTotal());
+            accountBalanceRepository.save(getUserBalanceResponse);
         } else {
-            updatedPayment.setOrderId(event.getPaymentRequest().getOrderId());
-            updatedPayment.setUserId(event.getPaymentRequest().getUserId());
-            updatedPayment.setPaymentTransactionId(event.getPaymentRequest().getTransactionId());
-            updatedPayment.setOrderTotal(event.getPaymentRequest().getOrderTotal());
-            updatedPayment.setCreatedTimestamp(event.getPaymentRequest().getEventTimestamp());
             updatedPayment.setPaymentStatus(PaymentStatus.FAILED);
             updatedPayment.setFailureReason(FailureReason.INSUFFICIENT_FUNDS);
         }
+        updatedPayment.setOrderId(event.getPaymentRequest().getOrderId());
+        updatedPayment.setUserId(event.getPaymentRequest().getUserId());
+        updatedPayment.setPaymentTransactionId(event.getPaymentRequest().getTransactionId());
+        updatedPayment.setOrderTotal(event.getPaymentRequest().getOrderTotal());
+        updatedPayment.setCreatedTimestamp(event.getPaymentRequest().getEventTimestamp());
+
         paymentRepository.save(updatedPayment);
-        logger.info(methodName, "Exit");
 
-    }
+        logger.info(methodName, "{} Exit");
 
-    @Transactional
-    private void updateUserBalance(PaymentEvent event, UserAccountBalance userAccountBalance) {
-        final String methodName = "updateUserBalance";
-        logger.info(methodName, "Entry");
-
-        UserAccountBalance updateUserBalance = accountBalanceRepository.findById(event.getPaymentRequest().getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        updateUserBalance.setAvailableBalance(userAccountBalance.getAvailableBalance() - event.getPaymentRequest().getOrderTotal());
-
-        accountBalanceRepository.save(updateUserBalance);
-        logger.info(methodName, "Exit");
     }
 }

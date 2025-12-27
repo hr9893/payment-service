@@ -50,6 +50,7 @@ services:
         condition: service_started
     ports:
       - "8082:8082"
+      - "5006:5005"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ordermanagementsystem
       SPRING_DATASOURCE_USERNAME: root

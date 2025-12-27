@@ -16,7 +16,7 @@ public class KafkaMessageListener {
     PaymentService paymentService;
     @KafkaListener(topics = IB_PAYMENT_EVENT, groupId = IB_PAYMENT_EVENT_GROUP)
     public void paymentEventListener(PaymentEvent event){
-        log.info("Listening to Payment Event");
+        log.info("Listening to Payment Event : {}", event.toString());
         paymentService.handlePaymentEvent(event);
     }
 }

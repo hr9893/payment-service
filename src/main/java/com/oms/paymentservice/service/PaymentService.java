@@ -73,6 +73,7 @@ public class PaymentService  {
         }
         paymentEvent.setUserId(event.getPaymentRequest().getUserId());
         paymentEvent.setOrderId(event.getPaymentRequest().getOrderId());
+        paymentEvent.setOrderTotal(event.getPaymentRequest().getOrderTotal());
         paymentEvent.setTransactionId(event.getPaymentRequest().getTransactionId());
         paymentEvent.setEventTimestamp(getLocalDateTime());
 
